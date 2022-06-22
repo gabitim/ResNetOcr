@@ -10,7 +10,6 @@ print("model is loaded")
 
 
 def resize_with_aspect_ratio(image, width=None, height=None, inter=cv2.INTER_AREA):
-    dim = None
     (h, w) = image.shape[:2]
 
     if width is None and height is None:
@@ -29,58 +28,61 @@ def get_upper_lower_bound_from_array(array):
     # https://builtin.com/data-science/how-to-find-outliers-with-iqr
 
     array.sort()
-    # print(array)
+    print(array)
     np_arr = np.array(array)
 
     q1, q3 = np.percentile(np_arr, [25, 75])
-    # print(q1, q3)
+    print(q1, q3)
 
     IQR = q3 - q1
 
-    upper_bound = (q3 + 1.5 * IQR) * 1.5
-    lower_bound = (q1 - 1.5 * IQR)
-    # print(upper_bound)
-    # print(lower_bound)
+    lower_bound = (q1 - 1.5 * IQR) - 2
+    print(lower_bound)
 
-    return lower_bound, upper_bound
+    return lower_bound
 
 
 def get_height_upper_lower_bound(cnts):
     height_arr = []
+    area_arr = []
 
     for c in cnts:
         # compute the bounding box of the contour
         (x, y, w, h) = cv2.boundingRect(c)
-        height_arr.append(h)
+        area_arr.append(w * h)
+        if w * h > 100:
+            height_arr.append(h)
+
+    print(area_arr)
 
     return get_upper_lower_bound_from_array(height_arr)
 
 
 if __name__ == "__main__":
     red_color = (0, 0, 255)
-    file_path = './images/20_3.jpg'
+    file_path = './images/21_5.jpg'
 
     image = cv2.imread(file_path)
-    image = resize_with_aspect_ratio(image, width=400)
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
     edged = cv2.Canny(blurred, 30, 150)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 1))
+    dilate = cv2.dilate(edged, kernel, iterations=1)
+    cv2.imshow('dilate_edged', resize_with_aspect_ratio(dilate, height=200))
 
-    cv2.imshow('edged', resize_with_aspect_ratio(edged, height=200))
-
-    cnts = cv2.findContours(edged.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cnts = cv2.findContours(dilate.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     cnts = imutils.grab_contours(cnts)
     cnts = sort_contours(cnts, method="left-to-right")[0]
     chars = []
 
-    (h_lower_bound, h_upper_bound) = get_height_upper_lower_bound(cnts)
+    h_lower_bound = get_height_upper_lower_bound(cnts)
 
     for c in cnts:
         # compute the bounding box of the contour
         (x, y, w, h) = cv2.boundingRect(c)
 
         # filter out bounding boxes
-        if h_lower_bound <= h <= h_upper_bound:
+        if h_lower_bound <= h:
             # extract the character and threshold it to make the character
             # appear as *white* (foreground) on a *black* background, then
             # grab the width and height of the thresholded image
